@@ -1,0 +1,167 @@
+---
+title: "R_TBA VE FAKTÖR ANALİZİ"
+output: html_document
+date: "2025-12-29"
+---
+
+
+
+```{r}
+library(haven)
+library(PerformanceAnalytics)
+library(corrplot)
+library(Hmisc)
+library(matlib)
+library(psych)
+library(factoextra)
+```
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+```
+
+KORELASYON
+```{r}
+veri_sayisal <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+                         "enginesize", "horsepower", "citympg", "price", "compressionratio")]
+chart.Correlation(veri_sayisal, histogram=TRUE, pch=19)
+```
+
+
+```{r}
+corrplot(cor(veri_sayisal))
+korelasyon <- cor(veri_sayisal)
+korelasyon
+```
+
+
+```{r}
+rcorr(as.matrix(veri_sayisal), type="pearson")
+det(cor(veri_sayisal))
+```
+```{r}
+invkor <- inv(korelasyon)
+colnames(invkor) <- rownames(invkor) <- colnames(korelasyon)
+invkor
+```
+PCA UYGULANABİLİRLİGİ (KMO - ANTİ-IMAGE - BARTLETT TEST)
+-1. KMO (Kaiser-Meyer-Olkin) Testi
+```{r}
+KMO(veri_sayisal)
+```
+#Veri setinin örneklem yeterliliğini ve değişkenlerin faktör analizi için uygunluğunu belirlemek amacıyla KMO testi uygulanmıştır.
+#Genel (Overall) MSA Değeri: 0.86.Veri setinin bütünüyle faktör analizi ve temel bileşenler analizi için uygun olduğunu gösterir.carwidth (0.95), price (0.92) ve carlength (0.90) gibi değişkenlerin MSA değerleri 0.90 üzerindedir, bu da onların analiz için uygun olduğunu kanıtlar.
+#compressionratio değişkeninin MSA değeri 0.30 olarak hesaplanmıştır. Literatürde kabul edilebilir en düşük sınır 0.50'dir.0.50'nin altında kalan bu değer, değişkenin diğer değişkenlerle ortak bir varyans yapısı oluşturamadığını gösterir. Daha önceki korelasyon matrisi incelemesinde de zayıf ilişkiler tespit edilen bu değişkenin, analizden çıkarılmasına karar verilmiştir.
+
+-2.Bartlett Küresellik Testi(Bartlett's Test of Spherecity) 
+```{r}
+cortest.bartlett(cor(veri_sayisal), nrow(veri_sayisal))
+```
+#Bu sonuç, veri setindeki değişkenler arasında faktör analizi yapmaya yetecek düzeyde güçlü ve anlamlı ilişkiler olduğunu kanıtlamaktadır. KMO testinden elde edilen yüksek örneklem yeterliliği (0.86) ve Bartlett testi sonucunda anlamlı bulunan ilişkiler, veri setinin faktör analizi (veya TBA) için uygun olduğunu göstermektedir.
+
+```{r}
+veri_temiz <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+                               "enginesize", "horsepower", "citympg", "price")]
+```
+
+```{r}
+
+chart.Correlation(veri_temiz, histogram=TRUE, pch=19)
+```
+
+```{r}
+corrplot(cor(veri_temiz))
+korelasyon_temiz <- cor(veri_temiz)
+korelasyon_temiz
+```
+
+```{r}
+rcorr(as.matrix(veri_temiz), type="pearson")
+det(cor(veri_temiz))
+```
+
+```{r}
+invkor_temiz <- inv(korelasyon_temiz)
+colnames(invkor_temiz) <- rownames(invkor_temiz) <- colnames(korelasyon_temiz)
+invkor_temiz
+```
+
+PCA UYGULANABİLİRLİGİ (KMO - ANTİ-IMAGE - BARTLETT TEST)
+-1. KMO (Kaiser-Meyer-Olkin) Testi
+```{r}
+KMO(veri_temiz)
+```
+
+#Veri setinin örneklem yeterliliğini ve değişkenlerin faktör analizi için uygunluğunu belirlemek amacıyla KMO testi uygulanmıştır.
+#Genel (Overall) MSA Değeri: 0.89.Veri setinin bütünüyle faktör analizi ve temel bileşenler analizi için uygun olduğunu gösterir.carwidth (0.95), price (0.94) ve carlength (0.89) gibi değişkenlerin MSA değerleri 0.89 üzerindedir, bu da onların analiz için uygun olduğunu kanıtlar.
+
+-2.Bartlett Küresellik Testi(Bartlett's Test of Spherecity) 
+```{r}
+cortest.bartlett(cor(veri_temiz), nrow(veri_temiz))
+```
+
+Temel Bilesenler Analizi- princomp fonksiyonu
+```{r}
+fit.pca <- prcomp(veri_temiz, scale. = TRUE)
+fit.pca$rotation
+```
+#PC1 sütununa bakıldığında; curbweight (0.39), carwidth (0.37), carlength (0.36), enginesize (0.36) ve price (0.36) değişkenlerinin tamamının yüksek ve pozitif değerlere sahip olduğu görülmektedir.Buna karşılık, yakıt verimliliğini gösteren citympg (-0.33) değişkeni negatif yüke sahiptir. Bu bileşen, aracın "büyüklüğü, gücü ve maliyeti" ile "yakıt tasarrufu" arasındaki zıtlığı temsil etmektedir. PC1 değeri yüksek olan araçlar; büyük, ağır, güçlü ve pahalıyken, düşük olanlar küçük ve az yakmaktadır.
+
+Bilesen sayisina karar vermek
+```{r}
+summary(fit.pca)
+(fit.pca$sdev)^2
+((fit.pca$sdev)^2) / 8
+```
+#Analiz sonucunda elde edilen özdeğerler (eigenvalues) ve kümülatif varyans oranları incelenmiştir. Kaiser ölçütü (özdeğer > 1) dikkate alındığında, birinci temel bileşenin özdeğerinin 6.07 olduğu görülmüştür. İkinci temel bileşenin özdeğeri 0.96 ile sınır değer olan 1'in hemen altında kalmasına rağmen, toplam varyansa %12'lik önemli bir katkı sağladığı görülmüştür.
+#Tek bileşenli yapıda açıklanan varyans %75.94 iken, ikinci bileşenin dahil edilmesiyle bu oran %87.98 gibi oldukça yüksek bir düzeye ulaşmaktadır. Veri setindeki bilgi kaybını minimize etmek (%12'lik kaybı önlemek) ve analizi çok boyutlu uzayda görselleştirebilmek adına 2 bileşenli yapının kullanılmasına karar verilmiştir.
+
+Scree plot
+```{r}
+plot(fit.pca)
+plot(fit.pca,type="line")
+```
+```{r}
+scree <- fviz_eig(fit.pca)
+scree
+```
+
+#Kırılma Noktası (The Elbow): Grafikteki eğim, 2. bileşenden sonra belirgin şekilde azalmakta ve 3. bileşenden (Özdeğer: 0.41) itibaren yatay bir seyir izlemeye başlamaktadır. Cattell’in Yamaç Testi (Scree Test) kriterine göre, "dirsek" (elbow) adı verilen bu kırılma noktasından önceki bileşenler anlamlı kabul edilir.
+
+ilk iki bilesene karar verildi:
+```{r}
+fit.pca$rotation[,1:2]
+```
+#Y_1 (PC1) = 0.32Wheelbase + 0.36Carlength + 0.37Carwidth + 0.39Curbweight + 0.36Enginesize + 0.33Horsepower - 0.33Citympg + 0.36Price
+#Y_2 = -0.60Wheelbase - 0.37Carlength - 0.22Carwidth - 0.07Curbweight + 0.22Enginesize + 0.52Horsepower - 0.29Citympg + 0.22Price
+#Elde edilen temel bileşenler (PC1 ve PC2), orijinal değişkenlerin doğrusal birer bileşimidir (linear combination). Denklemdeki katsayılar, ilgili değişkenin o bileşen üzerindeki ağırlığını veya önem derecesini temsil eder. Bu nedenle her değişkenin değeri, kendi ağırlık katsayısı ile çarpılarak toplanır ve o araca ait bileşen skoru elde edilir.
+
+```{r}
+fit.pca$rotation[,2]*fit.pca$sdev[2]
+fit.pca$rotation[,1]*fit.pca$sdev[1]
+```
+#PC1 ile en yüksek ilişkiyi Curbweight (Araç Ağırlığı) göstermektedir (r = 0.97). Bunu Carwidth (Genişlik) (0.90) ve Price (Fiyat) (0.90) takip etmektedir.Bir aracın ağırlığı, genişliği ve fiyatı arttıkça PC1 skoru doğrusallıkla artmaktadır.
+#PC2 ile Wheelbase (r = -0.59): Negatif yük, aracın boyu uzadıkça (dingil mesafesi arttıkça) PC2 skorunun düştüğünü gösterir.Horsepower (r = +0.51): Pozitif yük, motor gücü arttıkça skorun yükseldiğini gösterir.
+
+Skorları yazdırma
+```{r}
+proje_verisi$comp1 <- fit.pca$x[,1] 
+proje_verisi$comp2 <- fit.pca$x[,2]
+```
+
+Indeks olusturma
+```{r}
+proje_verisi$index <- proje_verisi$comp1 + proje_verisi$comp2
+```
+
+Sıralama
+```{r}
+head(proje_verisi[order(proje_verisi$index, decreasing = T),])
+```
+
+```{r}
+fviz_pca_var(fit.pca,
+             col.var = "steelblue",
+             repel = TRUE)
+```
+#Sağ Taraftaki Küme (PC1 Pozitif): price, curbweight, enginesize, carwidth ve carlength okları sağ tarafa doğru, birbirlerine yakın bakıyor.Bu değişkenler birlikte hareket ediyor. Yani motoru büyük olan araba, aynı zamanda ağırdır, geniştir ve pahalıdır.
+#Sol Taraftaki (PC1 Negatif): citympg (Yakıt Tüketimi) oku tam zıt yöne (sola) bakıyor.Bu, diğer tüm özelliklerle "ters" çalıştığını kanıtlar. Araba büyüdükçe yakıt verimliliği düşer (sol tarafa kaçar).

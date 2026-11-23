@@ -1,0 +1,213 @@
+---
+title: "R_DİSKRİMİNANT"
+output: html_document
+date: "2025-12-31"
+---
+
+Lineer Diskriminant Analizi
+
+
+
+```{r}
+library(haven)
+library(funModeling)
+library(dplyr)
+library(rstatix)
+library(corrplot)
+library(biotools)
+library(MASS)
+library(ggplot2)
+library(klaR)
+```
+
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+```
+#Analizin istatistiksel gücünü korumak ve varyans-kovaryans matrislerinin hesaplanmasında kararlılığı sağlamak amacıyla, gözlem sayısı düşük olan bu üç alt grup (Wagon, Hardtop ve Convertible) 'Diğerleri' (Others) kategorisi altında birleştirilecek.
+
+```{r}
+lda_veri <- proje_verisi[, c("carbody", "price", "horsepower", "curbweight", "citympg", "carwidth")]
+lda_veri$carbody <- factor(lda_veri$carbody, 
+levels = c("hatchback", "sedan", "wagon", "hardtop", "convertible"), 
+labels = c("Hatchback", "Sedan", "Digerleri", "Digerleri", "Digerleri"))
+summary(lda_veri)
+```
+```{r}
+names(lda_veri)
+```
+
+#Yapılan düzenleme sonucunda; Sedan ($n=96$), Hatchback (n=70) ve birleştirilmiş grup olan Diğerleri (n=39) ile analiz 3 ana sınıf üzerine oturtulmuştur.
+
+varsa eksik gözlemlerin çıkarılması
+
+#Veri setinde eksik gözlem bulunmadığı teyit edilmiştir.Ama deneysel amaçla aşağıdaki kod çalıştırılmıştır.
+
+```{r}
+lda_veri<-na.omit(lda_veri)
+summary(lda_veri)
+```
+Homogeneity of Covariances
+
+```{r}
+boxM(lda_veri[, -1], lda_veri$carbody)
+```
+#Varyans-kovaryans matrislerinin homojenliği Box-M testi ile incelenmiştir. Test sonucunda p < 0.001 değeri elde edilmiş ve homojenlik varsayımının ihlal edildiği görülmüştür. Ancak literatürde (Tabachnick & Fidell, 2013), en küçük gruptaki gözlem sayısı (Wagon grubumuzda n=25), bağımsız değişken sayısından (5 değişken) fazla olduğu sürece LDA analizinin bu ihlale karşı dirençli olduğu ve güvenilir sonuçlar ürettiği belirtilmektedir. Bu çalışmada örneklem büyüklüğü yeterli olduğundan analize devam edilmiştir.
+
+LDA
+
+```{r}
+lda_model <- lda(carbody ~ ., data = lda_veri)
+lda_model
+```
+
+#Diskriminant Fonksiyonları ve Grup Karakteristikleri Analiz sonucunda, grupları birbirinden ayırmak için iki adet diskriminant fonksiyonu elde edilmiştir.
+#Birinci Fonksiyon (LD1): Varyansın %81.3'ünü açıklayarak gruplar arasındaki temel ayrımı yapmaktadır. Katsayılar incelendiğinde, bu fonksiyonun özellikle Araç Genişliği (carwidth) ve Performans (horsepower) değişkenleri üzerinden "Küçük/Ekonomik" araçlar ile "Geniş/Lüks" araçları ayrıştırdığı görülmüştür.
+#İkinci Fonksiyon (LD2): Varyansın %18.7'sini açıklamakta ve geriye kalan ayrışımı sağlamaktadır.
+#Grup ortalamaları incelendiğinde; Hatchback grubunun en ekonomik (düşük fiyat, yüksek mpg) ve en küçük boyutlu araçlardan oluştuğu; buna karşın Diğerleri (Wagon/Convertible) grubunun en yüksek fiyat, en yüksek ağırlık ve en yüksek motor gücüne sahip araçlardan oluştuğu saptanmıştır. Sedan grubu ise bu iki grubun arasında yer almaktadır.
+
+```{r}
+cons <- apply(lda_veri[, -1], 2, mean)
+(-cons) %*% lda_model$scaling
+```
+#Y1 = 21.064 + (0.0001price) - (0.035horsepower) + (0.003curbweight) - (0.024citympg) - (0.402carwidth)
+#Y2 = 42.541 - (0.0001price) + (0.014horsepower) + (0.003curbweight) - (0.067citympg) - (0.721 carwidth)
+
+Grup tahmini yapilmasi
+
+```{r}
+lda_tahmin <- predict(lda_model)
+lda_tahmin$x      #diskriminant skorları
+lda_tahmin$class  #Sinif Tahminleri 
+```
+
+Anlamsz ayırma foknsiyonunu snıflamaya dahil etmemek için
+
+```{r}
+tahmin_tek_boyut <- predict(lda_model, newdata = lda_veri, dimen = 1)
+tahmin_tek_boyut
+```
+#plots
+-LD1 Skorlarına Göre Grup Dağılımları
+
+```{r}
+ldahist(data = lda_tahmin$x[,1], g = lda_veri$carbody)
+
+```
+#Grafik incelendiğinde; Hatchback grubunun negatif uçta (sol), Diğerleri grubunun ise pozitif uçta (sağ) kümelendiği görülmektedir. Sedan grubu ise bu iki ucun tam ortasında yer almakta ve her iki grupla da kesişim (overlap) göstermektedir.Bu tablo, araç sınıflarının keskin sınırlarla ayrılmadığını; Sedan sınıfının, 'Ekonomik/Küçük' (Hatchback) ve 'Lüks/Büyük' (Diğerleri) sınıfları arasında fiziksel bir geçiş formu olduğunu kanıtlamaktadır."
+
+
+-LD2 Skorlarına Göre Grup Dağılımları
+
+```{r}
+ldahist(data = lda_tahmin$x[,2], g = lda_veri$carbody)
+```
+#Varyansın %18.7'sini açıklayan ikinci fonksiyona (LD2) ait histogramlar incelendiğinde; Hatchback, Sedan ve Diğerleri gruplarının tamamının merkezde (yaklaşık -1 ile +1 aralığında) toplandığı ve dağılımların büyük ölçüde örtüştüğü (overlap) görülmektedir.Grafikte gruplar arasında belirgin bir ayrım olmaması, LD2 fonksiyonunun sınıflandırmadaki katkısının sınırlı olduğunu ve araç sınıflarını ayırmadaki asıl belirleyici gücün LD1 fonksiyonunda toplandığını doğrulamaktadır."
+
+Çapraz Tablonun olusturulmasi
+
+```{r}
+tablo_lda <- table(Gercek = lda_veri$carbody, Tahmin = lda_tahmin$class)
+tablo_lda
+```
+#Genel Doğruluk: (42 + 63 + 8) / 205 = %55.Model, verinin yarısından fazlasını doğru bilmiş. Ancak %45'lik bir hata payı var.Hatchback Başarısı (42/70 = %60).Sedan Başarısı (63/96 = %65.6).Diğerleri Başarısı (8/39 = \%20.5)
+
+
+Dogru siniflanma orani
+
+```{r}
+classrate_lda<-sum(diag(tablo_lda))/sum(tablo_lda)
+classrate_lda
+
+```
+#Yapılan Diskriminant Analizi sonucunda genel sınıflandırma başarısı %55.1 olarak bulunmuştur.Hatchback sınıfının %60, Sedan sınıfının %65.6 oranında doğru tahmin edilmesine rağmen; Diğerleri (Wagon/Convertible) grubunun %20.5'te kalması, Wagon kasa tipi araçların teknik özellikler (fiyat, motor gücü, ebatlar) bakımından Sedan araçlardan istatistiksel olarak ayırt edilemediğini göstermektedir. Bu bulgu, analize konu olan değişkenlerin (fiyat, beygir gücü, vb.) bu üç grubu tamamen ayrıştırmak için tek başına yeterli olmadığını, gruplar arasında doğal bir yapısal örtüşme (overlap) bulunduğunu kanıtlamaktadır.
+
+Nispi sans kriteri p1^2+p^2
+
+```{r}
+as.vector(lda_model$prior[1]^2 + 
+          lda_model$prior[2]^2 + 
+          lda_model$prior[3]^2)
+```
+#Eğer hiçbir analiz yapmadan rastgele tahmin etseydik başarı şansımız %37 olacaktı. Bizim kurduğumuz model %55.1 başarı sağladı. Modelimiz şans faktöründen çok daha başarılı olduğu için geçerli ve kullanılabilir bir modeldir.
+
+Orjinal gruplar ile Tahmin edilen grupların karşılaştırılması
+
+```{r}
+karsilastirma <- cbind(Gercek = lda_veri$carbody, Tahmin = lda_tahmin$class)
+karsilastirma
+
+```
+#Bu listede, veri setindeki 205 aracın her biri için "Gerçek Durum" ve "Modelin Tahmini"ni yan yana koyulmuştur.
+
+3lü çizim
+
+```{r}
+lda_veri$ld1 <- lda_tahmin$x[, 1]
+lda_veri$ld2 <- lda_tahmin$x[, 2]
+ggplot(data = lda_veri) + geom_point(aes(x = ld1, y = ld2, color = carbody), size = 2.5)
+```
+#Ana Ayrışma (LD1): Yatay eksen, Hatchback (sol taraf) ve Diğerleri (sağ taraf) gruplarını birbirinden net bir şekilde ayırmıştır. Bu, LD1'in sınıflandırmadaki asıl gücü oluşturduğunu gösterir.
+#Karmaşa Alanı (Sedan): Sedan grubu grafiğin tam ortasında yer almakta ve her iki uçla (özellikle 'Diğerleri' ile) yoğun bir şekilde iç içe geçmektedir (overlap).
+#Grafik, araç sınıflarının net sınırları olmadığını; aksine Hatchback'ten Sedan'a, oradan Lüks araçlara doğru giden fiziksel bir geçişlilik olduğunu görsel olarak kanıtlamaktadır. %55'lik başarı oranının sebebi bu görseldeki iç içe geçmedir.
+
+
+Partition Map-SPSS'deki Terrirotial Map
+
+```{r}
+partimat(carbody ~ ld1 + ld2, data = lda_veri , method = "lda")
+```
+Veri setini test-train şeklinde ayırarak analizi gerçekleştirmek isterseniz
+
+```{r}
+set.seed(123)
+ind <- sample(2, nrow(lda_veri),
+              replace = TRUE,
+              prob = c(0.8, 0.2))
+training2 <- lda_veri[ind == 1, ]   
+
+testing2  <- lda_veri[ind == 2, ]     
+
+training2$ld1 <- NULL
+training2$ld2 <- NULL
+testing2$ld1  <- NULL
+testing2$ld2  <- NULL
+
+print(paste("Egitim Seti Boyutu:", nrow(training2)))
+print(paste("Test Seti Boyutu:", nrow(testing2)))
+```
+#Toplam 205 verini şu şekilde böldük:
+#167 Araç (%81.5): Modeli bunlarla eğiteceğiz.
+#38 Araç (%18.5): Modeli bunlarla sınav yapacağız.
+#Eğitim ve test setleri oluşturulurken, önceki aşamalarda hesaplanan diskriminant skorları (ld1 ve ld2) veri setinden çıkarılmıştır. Bu işlem, modelin cevabı görerek tahmin yapmasını (Data Leakage / Veri Sızıntısı) engellemek ve gerçekçi bir başarı oranı elde etmek için uygulanmıştır.
+
+Linear Discriminant Analysis
+
+```{r}
+lda2 <- lda(carbody ~ ., data = training2)
+lda2
+```
+#Analiz için ayrılan 167 araçlık eğitim setinde; araçların %46'sı Sedan, %33.5'i Hatchback ve %20.4'ü Diğerleri grubuna aittir.
+
+Eğitim verisi sınıflama tahmini
+
+```{r}
+train_tahmin <- predict(lda2, training2)$class
+tab_train <- table(Predicted = train_tahmin, Actual = training2$carbody)
+tab_train
+sum(diag(tab_train))/sum(tab_train)
+```
+#Eğitim seti üzerindeki doğru sınıflandırma oranı %57.5 (0.5748) olarak hesaplanmıştır.Daha önce Test setinde bulduğumuz başarı oranı (yaklaşık %55) ile bu oran birbirine oldukça yakındır.
+
+Test verisi sınıflama tahmini
+
+```{r}
+test_tahmin <- predict(lda2, testing2)$class
+tab_test <- table(Predicted = test_tahmin, Actual = testing2$carbody)
+tab_test
+sum(diag(tab_test))/sum(tab_test)
+```
+#Test veri seti (n=38) üzerindeki sınıflandırma başarısı %52.6 olarak bulunmuştur.Analiz bulguları, araçların fiziksel özelliklerine dayanarak yapılan sınıflandırmada; Hatchback ve Sedan türlerinin %50-%60 aralığında ayırt edilebildiğini, ancak Diğerleri türünün Sedan araçlarla teknik olarak neredeyse aynı özelliklere sahip olması nedeniyle model tarafından ayırt edilemediğini ortaya koymuştur. Elde edilen %52.6'lık genel başarı oranı, şans başarısının (%37) üzerinde olsa da, araç tasarımındaki yapısal örtüşme (overlap) nedeniyle modelin ayrıştırma gücü sınırlı kalmıştır.
+
+
+
+

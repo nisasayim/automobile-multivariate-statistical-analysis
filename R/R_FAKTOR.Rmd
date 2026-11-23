@@ -1,0 +1,181 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-12-30"
+---
+
+```{r}
+library(haven)
+library(corrplot)
+library(Hmisc)
+library(matlib)
+library(scatterplot3d)
+library(psych)
+```
+
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+veri_sayisal <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+                         "enginesize", "horsepower", "citympg", "price", "compressionratio")]
+veri_sayisal <- na.omit(veri_sayisal)
+summary(veri_sayisal)
+```
+```{r}
+corrplot(cor(veri_sayisal))
+korelasyon <- cor(veri_sayisal)
+korelasyon
+```
+
+#citympg (Şehir içi yakıt verimliliği) değişkenine baktığımda, yukarıdaki o büyük grupla koyu kırmızı (negatif) bir ilişki görülüyor.Araç ağırlaştıkça ve motor büyüdükçe, yakıt tasarrufu düşer (citympg azalır).
+
+Korelasyon Matrisi ve P Değerleri
+
+```{r}
+rcorr(as.matrix(veri_sayisal), type="pearson")
+```
+#compressionratio:enginesize ile ilişkisi: 0.03,price ile ilişkisi 0.07.compressionratio değişkeni diğerleriyle ortak hareket etmiyor.
+
+Korelasyon Matrisinin Determinantı
+
+
+```{r}
+det(cor(veri_sayisal))
+```
+
+```{r}
+invkor <- inv(korelasyon)
+colnames(invkor) <- rownames(invkor) <- colnames(korelasyon)
+invkor
+```
+PCA UYGULANABİLİRLİGİ (KMO - ANTİ-IMAGE - BARTLETT TEST)
+-1. KMO (Kaiser-Meyer-Olkin) Testi
+
+```{r}
+KMO(veri_sayisal)
+```
+#compressionratio değişkeninin MSA değeri 0.30 olarak hesaplanmıştır.Bu değişkenin, analizden çıkarılmasına karar verilmiştir.
+
+-2.Bartlett Küresellik Testi(Bartlett's Test of Spherecity) 
+
+```{r}
+cortest.bartlett(cor(veri_sayisal), nrow(veri_sayisal))
+```
+```{r}
+veri_temiz <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+                               "enginesize", "horsepower", "citympg", "price")]
+```
+```{r}
+scree(veri_temiz, pc=TRUE)
+```
+
+#"Dirsek" (elbow) adı verilen bu kırılma noktasından önceki bileşenler anlamlı kabul edilir.(2)
+
+
+Temel Bilesenler Analizi Yöntemi(Kok lambda yaklasimi) secilerek faktor analizi
+
+```{r}
+fa_kokl <- principal(veri_temiz, nfactors = 2, rotate = "none")
+```
+```{r}
+print(fa_kokl$loadings, digits=3, cutoff=.3, sort=TRUE)
+```
+#Analiz sonucunda elde edilen 2 faktör, toplam veri setindeki değişkenliğin %88'ini açıklamaktadır.
+
+Tum degiskenlerin communality hesaplaması
+
+```{r}
+fa_kokl$communality 
+```
+```{r}
+rowSums(fa_kokl$loadings[ , ]^2)
+```
+#En düşük ortak varyans değeri 0.744 (citympg) iken, en yüksek değer 0.947 (wheelbase) olarak hesaplanmıştır. Bu sonuçlar, belirlenen 2 faktörlü yapının veri setindeki tüm değişkenleri yüksek bir başarıyla temsil ettiğini göstermektedir.
+
+Varyans aciklama oranlari
+
+```{r}
+colSums(fa_kokl$loadings[ , ]^2)/8
+```
+
+```{r}
+plot(fa_kokl$values, type="b", main="ScreePlot", xlab="Number of Factors", ylab="Eigenvalues")
+```
+#Bu da 2 faktörlü çözümün en doğru karar olduğunu görsel olarak kanıtlıyor.
+
+Rotasyon
+
+```{r}
+fa_kokl <- principal(veri_temiz, nfactors = 2, rotate = "varimax")
+print(fa_kokl$loadings, digits=3, cutoff=.3, sort=TRUE)
+```
+#F1 = 0.951horsepower + 0.806price + 0.801enginesize - 0.794citympg
+#F2 = 0.957wheelbase + 0.865 carlength + 0.773 carwidth + 0.702curbweight
+
+#Varimax döndürme yöntemi sonucunda, faktör yapısının daha belirgin ve yorumlanabilir bir hale geldiği görülmüştür. Toplam varyansın %88'ini açıklayan yapı, birbirine yakın ağırlığa sahip iki temel boyuta ayrışmıştır:
+#Birinci Faktör (Varyansın %46.7'si): "Motor Performansı" olarak adlandırılmıştır. Bu faktörde en yüksek yükü 0.951 ile beygir gücü (horsepower) almıştır. Motor hacmi, fiyat ve yakıt tüketimi (negatif) bu faktör altında toplanmıştır.
+#İkinci Faktör (Varyansın %41.2'si): "Fiziksel Boyutlar" olarak adlandırılmıştır. Bu faktörde en yüksek yükü 0.957 ile dingil mesafesi (wheelbase) almıştır. Araç uzunluğu, genişliği ve ağırlığı bu boyutu temsil etmektedir.
+#Sonuç olarak analiz; araçların özelliklerinin "Güç Odaklı Özellikler" ve "Boyut Odaklı Özellikler" olmak üzere iki temel yapıda incelenebileceğini ortaya koymuştur.
+
+Faktör Yapısının Görselleştirilmesi
+
+```{r}
+fa.diagram(fa_kokl)
+```
+
+#Faktör Analizi Yol Diyagramı. RC1, performans odaklı değişkenleri; RC2 ise boyutsal değişkenleri temsil etmektedir. Ok üzerindeki değerler faktör yüklerini göstermektedir.
+
+Faktor yuku grafigi
+
+```{r}
+fyuk2 <- fa_kokl$loadings[,1:2]
+factor.plot(fyuk2, cut=0.5, labels=rownames(fa_kokl$loadings),font = 2,cex    = 0.8)
+```
+Principal Axis Yontemiyle Faktor Analizi
+
+```{r}
+fa_pa <- fa(veri_sayisal, nfactors = 2, rotate = "none", fm = "pa")
+print(fa_pa$loadings, digits=3, cutoff=.3, sort=TRUE)
+```
+
+
+```{r}
+fa_pa <- fa(veri_temiz, nfactors = 2, rotate = "none", fm = "pa")
+print(fa_pa$loadings, digits=3, cutoff=.3, sort=TRUE)
+```
+```{r}
+frotate <- fa(veri_temiz, nfactors = 2, rotate = "varimax", fm = "pa", scores=TRUE)
+print(frotate$loadings, digits=3, cutoff=.3, sort=TRUE)
+fa.diagram(frotate)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

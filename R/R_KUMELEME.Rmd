@@ -1,0 +1,175 @@
+---
+title: "R_KUMELEME"
+output: html_document
+date: "2026-01-04"
+---
+
+
+
+
+```{r}
+library(haven)
+library(dendextend)
+library("Hmisc")
+library(factoextra)
+library(circlize)
+library(cluster)
+library(rstatix)
+```
+
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+```
+
+```{r}
+veri_sayisal <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+"enginesize", "horsepower", "citympg", "price", 
+"compressionratio")]
+veri_sayisal <- na.omit(veri_sayisal)
+summary(veri_sayisal)
+mydata <- scale(veri_sayisal)
+```
+Korelasyon matrisinin incelenmesi
+```{r}
+rcorr(as.matrix(veri_sayisal), type = "pearson")
+```
+#Aracın fiziksel boyutlarını temsil eden değişkenler arasında yüksek korelasyonlar tespit edilmiştir:
+carlength ile curbweight arasında: r = 0.88
+carwidth ile curbweight arasında: r = 0.87
+wheelbase ile carlength arasında: r = 0.87
+Korelasyon katsayıları kritik eşik kabul edilen 0.90 sınırının altında kalsa da, 0.80 - 0.88 bandındaki bu yüksek ilişkiler, kümeleme analizinde "Çoklu Bağlantı (Multicollinearity)" riskini artırmaktadır.
+Analiz, bu filtreleme sonucunda belirlenen 5 temel değişken (price, horsepower, citympg, curbweight, compressionratio) üzerinden sürdürülecektir.
+
+```{r}
+veri_kumeleme <- proje_verisi[, c("price", "horsepower", "citympg", "curbweight", "compressionratio")]
+veri_kumeleme <- na.omit(veri_kumeleme)
+rcorr(as.matrix(veri_kumeleme), type = "pearson")
+mydata <- scale(veri_kumeleme)
+```
+Hiyerarsik Kümeleme
+```{r}
+d <- dist(mydata, method = "euclidean")
+fit <- hclust(d, method = "ward.D2")
+dend <- as.dendrogram(fit)
+plot(dend)
+plot(color_branches(dend, k=3))
+```
+
+
+```{r}
+d2 <- dist(mydata, method = "euclidean")
+fit2 <- hclust(d2, method="ward.D2") 
+dend2<-as.dendrogram(fit2)
+labels(dend2) <- paste(as.character(proje_verisi$carname)[order.dendrogram(dend2)],"(",labels(dend2),")", sep = "") 
+plot(color_branches(dend2, k=3))
+par(mar = c(10,2,1,1)) 
+plot(color_branches(dend2, k=3)) 
+```
+
+Mahalanobis mesafesi ile (çok değişkenli) uç değer kontrolü
+```{r}
+X <- as.matrix(mydata)  
+md <- mahalanobis(X, colMeans(X), cov(X))
+cut <- qchisq(0.999, df = ncol(X))   
+m_out <- which(md > cut)
+length(m_out)
+m_out
+md[m_out]
+proje_verisi$carname[as.integer(rownames(veri_kumeleme))[m_out]]
+```
+#Veri setindeki potansiyel uç değerler incelendiğinde, bu gözlemlerin hatalı veri girişinden kaynaklanmadığı, aksine veri setindeki 'Lüks/Yüksek Performans' segmentini temsil eden (Örn: Porsche, Jaguar) gerçek gözlemler olduğu belirlenmiştir. Bu araçları veri setinden çıkarmak, pazarın üst segmentine dair bilginin kaybolmasına neden olacağı için uç değerler analize dahil edilerek ayrı bir küme olarak değerlendirilmiştir.
+
+Farklı şekilde dendrogam çizimleri
+
+```{r}
+geneldend<-dend2 %>%
+  set("branches_lwd", 2) %>%
+  set("branches_k_color", k=3)%>%
+  set("labels_cex", 0.5)%>%
+  set("labels_colors",k=3)
+plot(geneldend,font.axis = 2) #type="triangle"
+```
+
+```{r}
+res.hc <- hclust(d2,  method = "ward.D2")
+fviz_dend(res.hc, cex = 0.5, k = 3, palette = "jco") 
+```
+
+```{r}
+ggd1 <- as.ggdend(geneldend)
+library(ggplot2)
+ggplot(ggd1, horiz = T) 
+```
+
+```{r}
+geneldend%>%
+  set("labels_colors",k=3) %>% 
+  circlize_dendrogram(dend_track_height=0.7)
+```
+
+K-MEANS  
+Küme sayisinin Belirlenmesi için 
+```{r}
+fviz_nbclust(mydata, kmeans, method = "wss")
+fviz_nbclust(mydata, kmeans, method = "silhouette")
+```
+
+#Küme sayısını belirlemek amacıyla Elbow grafiği ve dendrogram birlikte değerlendirilmiştir. Elbow grafiğinde k arttıkça WSS azalsa da, kümelerin daha anlaşılır ve yorumlanabilir olması ve dendrogramda verinin 3 ana grup altında toplandığının görülmesi nedeniyle k=3 seçilmiştir.
+
+```{r}
+set.seed(123) 
+km.res <- kmeans(mydata, centers = 3, nstart = 50)
+t(km.res$centers)
+```
+
+
+İlk iki faktörün cizdirilmesi
+```{r}
+clusplot(mydata, km.res$cluster, main='2D representation of the Cluster solution',
+         color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+```
+
+
+
+```{r}
+fviz_cluster(km.res, data = mydata, 
+             palette = "jco", 
+             ggtheme = theme_minimal())
+```
+
+```{r}
+veri_kumeleme$cluster <- km.res$cluster
+veri_kumeleme$cluster <- as.factor(veri_kumeleme$cluster)
+head(veri_kumeleme)
+```
+
+Anova tablosu
+```{r}
+price_aov <- aov(price ~ cluster, data = veri_kumeleme)
+summary(price_aov)
+horsepower_aov <- aov(horsepower ~ cluster, data = veri_kumeleme)
+summary(horsepower_aov)
+citympg_aov <- aov(citympg ~ cluster, data = veri_kumeleme)
+summary(citympg_aov)
+curbweight_aov <- aov(curbweight ~ cluster, data = veri_kumeleme)
+summary(curbweight_aov)
+compression_aov <- aov(compressionratio ~ cluster, data = veri_kumeleme)
+summary(compression_aov)
+```
+
+
+```{r}
+km.res$size
+```
+
+
+
+
+
+
+
+
+
+
+

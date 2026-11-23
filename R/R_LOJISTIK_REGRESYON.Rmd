@@ -1,0 +1,302 @@
+---
+title: "R_LOJİSTİK REGRESYON"
+output: html_document
+date: "2026-01-02"
+---
+
+
+
+```{r}
+library(tidyverse) 
+library(modelr)    
+library(broom) 
+library(haven)
+library(corrplot)
+library(matlib)
+library(ResourceSelection)
+library(DescTools)
+library(cvms)
+library(ggplot2)
+library(tibble)
+library(MASS)
+library(ggimage)
+library(rsvg)
+
+```
+
+Binary Logistic Regression
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+summary(proje_verisi)
+```
+```{r}
+proje_verisi$aspiration <- factor(proje_verisi$aspiration, 
+                                  levels = c("std", "turbo"), 
+                                  labels = c("Standart", "Turbo"))
+summary(proje_verisi$aspiration)
+
+```
+```{r}
+contrasts(proje_verisi$aspiration)
+```
+
+
+Korelasyon
+```{r}
+veri_sayisal <- proje_verisi[, c("wheelbase", "carlength", "carwidth", "curbweight", 
+"enginesize", "horsepower", "citympg", "price", 
+"compressionratio")]
+korelasyon <- corrplot(cor(veri_sayisal), method="number")
+invkor <- inv(korelasyon$corr)
+invkor
+
+```
+
+
+
+```{r}
+veri_sayisal_yeni <- veri_sayisal[, -c(1, 2, 4, 5, 8)]
+korelasyon2 <- corrplot(cor(veri_sayisal_yeni), method="number")
+invkor <- inv(korelasyon2$corr)
+invkor
+```
+
+Logistic Regresyon 
+
+```{r}
+model_final <- glm(aspiration ~ horsepower + citympg + carwidth + compressionratio, 
+                   data = proje_verisi, 
+                   family = binomial)
+summary(model_final)
+```
+#Sıkıştırma Oranı (En Önemli Faktör): Modeldeki en belirleyici değişkendir (p < 0.001). Sıkıştırma oranı arttıkça, aracın Turbo olma ihtimali artmaktadır.
+#Yakıt Tüketimi (Citympg): Anlamlı ve ters yönlü bir ilişki vardır (p = 0.015). Araç az yaktıkça (tasarruflu oldukça), Turbo olma ihtimali düşmektedir.
+#Etkisiz Değişkenler: Beygir gücü ve araç genişliği, bu modelde Turbo durumunu ayırt etmede istatistiksel olarak anlamsız kalmıştır.
+
+SPSS OBND0MUS TESTS OF MODEL COEFFD0CD0ENTS TABLOSU
+
+Ki-kare istatistginin hesabi
+```{r}
+model_final$deviance
+model_final$null.deviance
+kikare<- model_final$null.deviance-model_final$deviance
+kikare
+```
+#Modelin genel performansını değerlendirmek için 'Likelihood Ratio Test' (Olabilirlik Oranı Testi) uygulanmıştır. Hiçbir bağımsız değişkenin olmadığı (sadece sabit terimli) 'Boş Model' (Null Model) ile kurduğumuz modelin sapma (deviance) değerleri karşılaştırılmıştır. Model Ki-Kare (Model Chi-Square) değeri 39.955 olarak hesaplanmıştır.
+
+Serbestlik derecesi hesabi
+```{r}
+model_final$df.null
+model_final$df.residual
+df<-model_final$df.null-model_final$df.residual
+df
+```
+#Analizde kullanılan Ki-Kare dağılımı için serbestlik derecesi (df) hesaplanmıştır. Serbestlik derecesi 4 olarak bulunmuştur; bu değer modele eklenen bağımsız değişken sayısını (horsepower, citympg, carwidth, compressionratio) temsil etmektedir.
+
+Ki kare istatistigine ait p degerinin hesabi
+```{r}
+kikare.p<- 1 - pchisq(kikare,df)
+kikare.p
+```
+#Modelin bütünüyle anlamlı olup olmadığını test etmek amacıyla p değeri hesaplanmıştır. Elde edilen p değeri (p < 0.001), 0.05 anlamlılık düzeyinden küçüktür. Bu nedenle Yokluk Hipotezi (H0) reddedilir. Kurulan lojistik regresyon modeli istatistiksel olarak anlamlıdır.
+
+Hosmer Lemeshov hesabi
+```{r}
+hoslem.test(model_final$y,fitted(model_final))
+```
+
+Modelin R^2 degerlerinin hesabi 
+```{r}
+PseudoR2(model_final, which = c("CoxSnell","Nagelkerke","McFadden"))
+```
+
+```{r}
+N <- nrow(veri_sayisal_yeni)
+N
+```
+
+
+Cox and Snell R^2
+```{r}
+R.cs <- 1 - exp((model_final$deviance - model_final$null.deviance) / N)
+R.cs
+```
+
+
+Nagelkerke R^2
+```{r}
+R.n <- R.cs / (1 - (exp(-(model_final$null.deviance / N))))
+R.n
+```
+
+
+Model katsayılarının üstel (exponential) alınmış hali ve %95 güven aralıkları
+```{r}
+exp(coef(model_final))
+exp(confint.default(model_final, level = 0.95))
+```
+
+
+Atama Tablosu
+```{r}
+type_pred <- fitted(model_final)
+typefac <- ifelse(type_pred > 0.5, "Turbo", "Standart")
+t_tab <- table(proje_verisi$aspiration, typefac)
+t_tab
+```
+Toplam Doğru Atanma Yüzdesi
+```{r}
+sum(diag(t_tab)) / sum(t_tab)
+```
+
+
+Atama Tablosu Görselleştirme
+```{r}
+datatib <- tibble("target" = proje_verisi$aspiration, "prediction" = typefac)
+basic_table <- table(datatib)
+basic_table
+cfm <- tidy(basic_table)
+cfm
+```
+
+
+```{r}
+plot_confusion_matrix(cfm, 
+     target_col = "target", 
+     prediction_col = "prediction",
+     counts_col = "n",
+     add_normalized = FALSE,
+     add_row_percentages = FALSE,
+     font_col_percentages= font(size = 6),
+     font_counts = font(size = 6),
+     tile_border_color = "black") +
+  xlab("Gercek Durum") +
+  ylab("Tahmin Edilen") +
+  theme(axis.text = element_text(size = 12, face = "bold"),
+        axis.title = element_text(size = 14, face = "bold"))
+```
+
+
+Stepwise Yöntemler ile Lojistik Regresyon
+```{r}
+step_model <- step(model_final, direction = "backward") 
+step_model
+summary(step_model)
+exp(step_model$coefficients)
+exp(confint.default(step_model, level = 0.95))
+```
+#Backward stepwise (AIC) yöntemiyle kurulan lojistik regresyon modelinde başlangıçta horsepower, citympg, carwidth ve compressionratio değişkenleri kullanılmıştır. AIC kriterine göre carwidth ve horsepower modelden çıkarıldığında AIC azalmıştır. En iyi model aspiration ~ citympg + compressionratio olarak seçilmiştir (AIC=160.15). Son modelde citympg değişkeni turbo olma olasılığını anlamlı şekilde azaltmaktadır (β=-0.192, p<0.001, OR=0.825, %95 GA: 0.756–0.900). compressionratio ise turbo olma olasılığını anlamlı şekilde artırmaktadır (β=0.265, p<0.001, OR=1.303, %95 GA: 1.175–1.445). Null deviance’tan residual deviance’a düşüş (193.57→154.15) modelin boş modele göre daha iyi uyum sağladığını göstermektedir.
+
+Atama Tablosu (Confusion Matrix)
+```{r}
+type_pred <- fitted(step_model)
+typefac <- ifelse(type_pred > 0.5, "Turbo", "Standart")
+t_tab <- table(proje_verisi$aspiration, typefac)
+t_tab
+```
+
+
+Toplam Doğru Atanma Yüzdesi
+```{r}
+sum(diag(t_tab)) / sum(t_tab)
+```
+
+
+Atama Tablosu Görselleştirme
+```{r}
+datatib <- tibble("target" = proje_verisi$aspiration, "prediction" = typefac)
+datatib
+basic_table <- table(datatib)
+basic_table
+cfm <- tidy(basic_table)
+cfm
+```
+```{r}
+plot_confusion_matrix(cfm, 
+    target_col = "target", 
+    prediction_col = "prediction",
+    counts_col = "n",
+    add_normalized = FALSE,
+    add_row_percentages = FALSE,
+                      # 'font' yerine 'list' kullanarak hata almayı engelliyoruz:
+    font_col_percentages= font(size = 6),
+    font_counts = font(size = 6),
+    tile_border_color = "black") +
+    xlab("Gercek Durum") +
+    ylab("Tahmin Edilen") +
+  theme(axis.text = element_text(size = 12, face = "bold"),
+        axis.title = element_text(size = 14, face = "bold"))
+```
+
+
+Alternatif Görsel
+```{r}
+fourfoldplot(t_tab,
+             color = c("#CC6666", "#99CC99"),  
+             conf.level = 0,                  
+             margin = 1,
+             main = "Sınıflama Tablosu")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
