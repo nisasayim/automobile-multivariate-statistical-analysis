@@ -1,0 +1,438 @@
+---
+title: "ÇDA PROJE"
+output: html_document
+date: "2025-12-26"
+---
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+library(car)
+library(broom)
+library(dplyr)
+library(tidyr)
+library(haven)
+library(effectsize)
+library(heplots)
+library(gplots)
+library(biotools)
+```
+
+```{r}
+proje_verisi <- read_sav("filtrelenmis_proje.sav")
+summary(proje_verisi)
+```
+
+```{r}
+
+proje_verisi$fueltype       <- as.factor(proje_verisi$fueltype)       
+proje_verisi$aspiration     <- as.factor(proje_verisi$aspiration)    
+proje_verisi$carbody        <- as.factor(proje_verisi$carbody)       
+proje_verisi$drivewheel     <- as.factor(proje_verisi$drivewheel)     
+proje_verisi$cylindernumber <- as.factor(proje_verisi$cylindernumber) 
+
+summary(proje_verisi)
+```
+
+Grup gozlem dagilimi
+```{r}
+proje_verisi %>% 
+  group_by(fueltype) %>% 
+  summarise(N = n())
+```
+```{r}
+proje_verisi %>% 
+  group_by(aspiration) %>% 
+  summarise(N = n())
+```
+```{r}
+proje_verisi %>% 
+  group_by(carbody) %>% 
+  summarise(N = n())
+```
+```{r}
+proje_verisi %>% 
+  group_by(drivewheel) %>% 
+  summarise(N = n())
+```
+```{r}
+proje_verisi %>% 
+  group_by(cylindernumber) %>% 
+  summarise(N = n())
+```
+
+Degiskenlere Gore Ortalamalar ve Ortalama Cizimleri
+
+Duzeyler bazinda degisken ortalamalari ve sapmalar
+1. YAKIT TİPİNE GÖRE (fueltype)
+```{r}
+proje_verisi %>%
+  group_by(fueltype) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd)))
+```
+2. HAVA EMİŞ TÜRÜNE GÖRE (aspiration)
+```{r}
+proje_verisi %>%
+  group_by(aspiration) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd)))
+```
+3. KASA TİPİNE GÖRE (carbody)
+```{r}
+proje_verisi %>%
+  group_by(carbody) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd)))
+```
+4. ÇEKİŞ SİSTEMİNE GÖRE (drivewheel)
+```{r}
+proje_verisi %>%
+  group_by(drivewheel) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd)))
+```
+5. SİLİNDİR SAYISINA GÖRE (cylindernumber)
+```{r}
+proje_verisi %>%
+  group_by(cylindernumber) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd)))
+```
+KASA TİPİ İÇİN
+```{r}
+plotmeans(price ~ carbody, 
+          xlab="Kasa Tipi (Carbody)", 
+          ylab="Fiyat (Price)", 
+          main="Kasa Tipine Göre Fiyat Ortalaması", 
+          data=proje_verisi)
+```
+```{r}
+plotmeans(horsepower ~ carbody, 
+          xlab="Kasa Tipi", ylab="Beygir Gucu", 
+          main="Kasa Tipine Gore Beygir Gucu", 
+          data=proje_verisi)
+```
+```{r}
+plotmeans(citympg ~ carbody, 
+          xlab="Kasa Tipi", ylab="Yakıt Tüketimi (MPG)", 
+          main="Kasa Tipine Göre Yakıt Tüketimi", 
+          data=proje_verisi)
+```
+ÇEKİŞ SİSTEMİ İÇİN
+```{r}
+plotmeans(price ~ drivewheel, 
+          xlab="Çekiş Sistemi", ylab="Fiyat", 
+          main="Çekiş Sistemine Göre Fiyat Ortalaması", 
+          data=proje_verisi)
+```
+```{r}
+plotmeans(horsepower ~ drivewheel, 
+          xlab="Cekiş Sistemi", ylab="Beygir Gucu", 
+          main="Cekiş Sistemine Gore Beygir Gucu", 
+          data=proje_verisi)
+```
+```{r}
+plotmeans(citympg ~ drivewheel, 
+          xlab="Çekiş Sistemi", ylab="Yakıt Tüketimi (MPG)", 
+          main="Çekiş Sistemine Göre Yakıt Tüketimi", 
+          data=proje_verisi)
+```
+Multivariate Normality
+```{r}
+proje_verisi %>%
+  dplyr::select(price, horsepower, citympg) %>%
+  mshapiro_test()
+```
+#P < .05 olduğu için H0 "Veriler çok değişkenli normal dağılır" reddedilir; veri seti çok değişkenli normal dağılım varsayımını sağlamamaktadır.
+
+```{r}
+proje_log <- proje_verisi %>%
+  mutate(
+    log_price = log(price),
+    log_horsepower = log(horsepower),
+    log_citympg = log(citympg)
+  )
+```
+```{r}
+proje_log %>%
+  dplyr::select(log_price, log_horsepower, log_citympg) %>%
+  mshapiro_test()
+```
+#Veri setinde Logaritma dönüşümü denenmiş, W istatistiği 0.97'ye kadar yükselmiş olsa da p < .05 kaldığı için çok değişkenli normallik varsayımı hala sağlanmamıştır.
+
+```{r}
+proje_sqrt <- proje_verisi %>%
+  mutate(
+    sqrt_price = sqrt(price),
+    sqrt_horsepower = sqrt(horsepower),
+    sqrt_citympg = sqrt(citympg)
+  )
+```
+```{r}
+proje_sqrt %>%
+  dplyr::select(sqrt_price, sqrt_horsepower, sqrt_citympg) %>%
+  mshapiro_test()
+```
+#Yapılan Multivariate Shapiro-Wilk normallik testi sonucunda:P Değeri:8.67e-09. Bu değer, kabul edilen anlamlılık düzeyi olan 0.05'ten küçüktür.H0 "Verilerin çok değişkenli normal dağıldığı hipotezi"reddedilmiştir.
+
+```{r}
+donusum_parametreleri <- powerTransform(cbind(price, horsepower, citympg) ~ 1, data = proje_verisi)
+summary(donusum_parametreleri)
+```
+
+```{r}
+proje_boxcox <- proje_verisi %>%
+  mutate(
+    bc_price = bcPower(price, donusum_parametreleri$lambda["price"]),
+    bc_horsepower = bcPower(horsepower, donusum_parametreleri$lambda["horsepower"]),
+    bc_citympg = bcPower(citympg, donusum_parametreleri$lambda["citympg"])
+  )
+proje_boxcox %>%
+  dplyr::select(bc_price, bc_horsepower, bc_citympg) %>%
+  mshapiro_test()
+```
+
+#P Değeri:7.33e-05,0.05'ten küçüktür.: İstatistiksel olarak verilerin normal dağıldığı hipotezi yine reddedilmiştir.Ancak Shapiro-Wilk W değeri 1'e oldukça yaklaşmıştır.
+#Veri setinin çok değişkenli normal dağılım varsayımını sağlamaması üzerine; Logaritma, Karekök ve Box-Cox dönüşümleri sırasıyla denenmiştir.Hiçbir dönüşüm yöntemi ile p değeri .05 anlamlılık düzeyinin üzerine çıkarılamamıştır.Hatalı veya aşırı karmaşık bir dönüşümle veriyi zorlamak yerine; varsayımlar tam sağlanmadığı için, ihlallere daha dayanıklı kabul edilen Pillai’s Trace ile analizleri sürdüreceğiz. Orijinal veri setiyle analizlere devam edeceğiz.
+
+
+Homogeneity of Covariances
+-Kasa tipine göre varyans-kovaryans homojenliği
+```{r}
+box_m(proje_verisi[, c("price", "horsepower", "citympg")], proje_verisi$carbody)
+```
+#P < .05 → H0 "Grupların varyans–kovaryans matrisleri eşittir" reddedilir; kovaryans homojenliği varsayımı sağlanmamıştır.
+
+-Çekiş sistemine göre varyans-kovaryans homojenliği
+```{r}
+box_m(proje_verisi[, c("price", "horsepower", "citympg")], proje_verisi$drivewheel)
+```
+#P değerim 0.05'ten çok çok küçüktür."Varyanslar Eşittir" hipotezi reddedilir.
+
+MANOVA 
+
+```{r}
+arac_manova <- manova(cbind(price, horsepower, citympg) ~ carbody, data = proje_verisi)
+summary(arac_manova, test = "Pillai")
+```
+#Normallik ve homojenlik varsayımlarımız bozulduğu Pillai sonucuna bakıyoruz.P Değeri: 1.449e-07.P değeri 0.05'ten çok çok küçüktür.Kasa tipi, araçların Fiyat, Beygir Gücü ve Yakıt Tüketimi özelliklerini şans eseri değil, istatistiksel olarak anlamlı ve belirgin bir şekilde değiştirmektedir.
+
+```{r}
+etasq(arac_manova, test = "Pillai")
+```
+#Orta Büyüklükte Etki(Araçların Fiyat, Beygir Gücü ve Yakıt Tüketimindeki değişimin yaklaşık %8.8'i, doğrudan aracın Kasa Tipiyle (Sedan, Hatchback vb.) açıklanmaktadır.)
+
+Homogeneity of variance- Levene's Test
+
+```{r}
+leveneTest(price ~ carbody, data = proje_verisi, center = mean)
+leveneTest(horsepower ~ carbody, data = proje_verisi, center = mean)
+leveneTest(citympg ~ carbody, data = proje_verisi, center = mean)
+```
+```{r}
+proje_verisi %>% 
+  pivot_longer(c(price, horsepower, citympg), names_to = "variable", values_to = "value") %>%
+  group_by(variable) %>%
+  levene_test(value ~ carbody, center = mean)
+```
+
+#horsepower (Beygir Gücü):P değeri 0.145 (0.05'ten büyük).Varyansı gruplar arasında eşittir (homojendir).
+#citympg (Yakıt Tüketimi):P değeri 0.033 (0.05'ten küçük).Varyanslar tam olarak eşit değil ama çok büyük bir ihlal de yok.
+#price (Fiyat):P değeri 3.41e-08 (Sıfıra çok yakın).Varyanslar kesinlikle eşit değil.
+
+```{r}
+summary.aov(arac_manova)
+```
+#Yapılan tek değişkenli analizler sonucunda; kasa tipinin araçların Fiyatı (p < .001) ve Beygir Gücü (p < .05) üzerinde istatistiksel olarak anlamlı bir fark yarattığı görülmüştür. Ancak, kasa tipi ve şehir içi yakıt tüketiminin (p > .05) üzerinde anlamlı bir etkisi bulunamamıştır.
+
+Levene- Equal variances -Tukey
+-BEYGİR GÜCÜ İÇİN TUKEY TESTİ
+
+```{r}
+beygir_aov <- aov(horsepower ~ carbody, data = proje_verisi)
+etasq(beygir_aov)
+TukeyHSD(beygir_aov, "carbody")
+```
+#P adj değeri 0.05'ten küçük olan satırlar anlamlı farkı gösterir.Yapılan Tukey çoklu karşılaştırma testi sonucunda; Hardtop kasa tipine sahip araçların, hem Hatchback hem de Wagon tipi araçlardan istatistiksel olarak anlamlı düzeyde daha yüksek beygir gücüne sahip olduğu görülmüştür. Diğer kasa tipleri (Sedan, Hatchback, Wagon) arasında ise motor gücü açısından anlamlı bir fark bulunamamıştır.
+#Hardtop araçların beygir gücü Hatchback'lerden ortalama 41 beygir daha fazladır.Hardtop araçların beygir gücü, Wagon  araçlardan ortalama 45 beygir daha fazladır.
+
+Levene- Not equal variances  - Games Howell
+-YAKIT TÜKETİMİVE FİYAT İÇİN GAMES-HOWELL TESTİ
+
+
+```{r}
+gh_yakit <- games_howell_test(proje_verisi, citympg ~ carbody)
+gh_yakit
+```
+#Yapılan Games-Howell çoklu karşılaştırma testi sonucunda; yakıt tüketimi açısından sadece P değeri (p.adj): 0.035 ile Convertible ve Hatchback kasa tipleri arasında istatistiksel olarak anlamlı bir fark bulunmuştur (p < .05). Diğer kasa tipleri (Sedan, Hardtop, Wagon) arasında yakıt tüketimi bakımından anlamlı bir farklılaşma gözlenmemiştir (p > .05).
+
+
+```{r}
+gh_fiyat <- games_howell_test(proje_verisi, price ~ carbody)
+gh_fiyat
+```
+#Yapılan Games-Howell çoklu karşılaştırma testi sonucunda; Fiyat (price) değişkeni açısından istatistiksel olarak anlamlı fark gösteren ikili grubun Hatchback ve Sedan olduğu tespit edilmiştir (p = .002).Bu iki grup arasında fiyat farkı bulunmaktadır.
+
+Çift Yönlü Manova
+
+```{r}
+tryCatch(
+  boxM(cbind(price, horsepower, citympg) ~ carbody * drivewheel, data = proje_verisi),
+  error = function(e) message("BoxM hesaplanamadı: ", e$message)
+)
+```
+
+
+```{r}
+table(proje_verisi$carbody, proje_verisi$drivewheel)
+```
+#İki yönlü MANOVA analizi öncesinde varyans-kovaryans matrislerinin homojenliğini test etmek amacıyla Box-M testi denenmiştir. Ancak, kasa tipi ve çekiş sistemi değişkenlerinin oluşturduğu bazı alt gruplarda yeterli gözlem sayısı bulunmadığı veya hiç gözlem olmadığı için Box-M testi hesaplanamamıştır.Pillai testi uygulayacağız.
+
+```{r}
+proje_temiz121 <- proje_verisi %>% 
+  filter(!carbody %in% c("hardtop", "convertible"))
+```
+
+
+```{r}
+manova_cift <- manova(cbind(price, horsepower, citympg) ~ carbody * drivewheel, data = proje_temiz121)
+```
+```{r}
+summary(manova_cift, test = "Pillai")
+```
+#carbody:drivewheel P Değeri: 0.0184.P değeri 0.05'ten küçüktür.Kasa Tipi ile Çekiş Sistemi arasında istatistiksel olarak anlamlı bir etkileşim vardır.
+#carbody P Değeri: 4.357e-10.P < 0.001 diğer faktörlerden bağımsız olarak, Kasa Tipi genel manada arabanın özelliklerini (Fiyat, Beygir Gücü, Yakıt) değiştiriyor.
+#drivewheel P Değeri: < 2.2e-16.P < 0.001 çekiş sistemi (4 çeker, önden, arkadan), arabanın özelliklerini belirleyen en güçlü faktörlerden biri.
+
+Partial Eta Squared Hesaplamak İçin
+
+```{r}
+etasq(manova_cift,test="Pillai")
+```
+Homogeneity of variance- Levene's Test
+
+```{r}
+proje_verisi %>% 
+  pivot_longer(c(price, horsepower, citympg), names_to = "variable", values_to = "value") %>% 
+  group_by(variable) %>% 
+  levene_test(value ~ carbody * drivewheel, center = mean)
+```
+
+#Levene testi sonuçlarına göre; Yakıt Tüketimi (citympg) değişkeni için varyansların homojenliği varsayımı sağlanmış (p > .05), ancak Fiyat (price) ve Beygir Gücü (horsepower) değişkenleri için bu varsayım sağlanamamıştır (p < .05).
+
+Test of Between Subjects
+
+```{r}
+summary.aov(manova_cift)
+etasq(aov(price ~ carbody * drivewheel, data = proje_verisi))
+etasq(aov(horsepower ~ carbody * drivewheel, data = proje_verisi))
+etasq(aov(citympg ~ carbody * drivewheel, data = proje_verisi))
+```
+
+#FİYAT
+Kasa Tipi (carbody):p < 0.001.Fiyatı belirleyen en önemli faktörlerden biri kasa tipi.
+Çekiş Sistemi (drivewheel):p < 0.001.Arabanın önden veya arkadan çekişli olması fiyatı etkiliyor.
+carbody:drivewheel: p = 0.1628 > 0.05.Fiyat, kasa ve çekişin toplamından ibaret, özel bir etkileşim yok.
+#BEYGİR GÜCÜ
+Kasa Tipi:p = 0.0025.Anlamlı
+Çekiş Sistemi:p < 0.001.Anlamlı
+carbody:drivewheel:p = 0.4591 > 0.05.Anlamsız.Motor gücü üzerinde kasa ve çekişin ortaklaşa yarattığı özel bir etki yok.
+#YAKIT TÜKETİMİ
+Kasa Tipi:p = 0.02008.Anlamlı
+Çekiş Sistemi:p < 0.001.Anlamlı.Yakıtı en çok etkileyen şey çekiş sistemidir (4 çeker çok yakar, önden çekiş az yakar).
+carbody:drivewheel:p = 0.5560 > 0.05. Anlamsız.Tek yönlü analizde yakıt tüketimi üzerinde etkisi görülmeyen kasa tipinin, çekiş sistemi kontrol altına alındığında yakıt tüketimi üzerinde de anlamlı bir fark yarattığı (p=.02) tespit edilmiştir.
+
+Çoklu Karsilastirmalar (Multiple Comparisons)
+-YAKIT TÜKETİMİ İÇİN TUKEY TESTİ
+
+```{r}
+m_tukey_yakit <- proje_verisi %>%
+  pivot_longer(citympg, names_to = "variables", values_to = "value") %>%
+  group_by(variables) %>%
+  tukey_hsd(value ~ carbody * drivewheel)
+m_tukey_yakit <- m_tukey_yakit[, c(1, 2, 4, 3, 6:10)]
+yakit_etkilesim <- filter(m_tukey_yakit, term == "carbody")
+print(yakit_etkilesim)
+```
+```{r}
+m_tukey_yakit <- proje_verisi %>%
+  pivot_longer(citympg, names_to = "variables", values_to = "value") %>%
+  group_by(variables) %>%
+  tukey_hsd(value ~ carbody * drivewheel)
+m_tukey_yakit <- m_tukey_yakit[, c(1, 2, 4, 3, 6:10)]
+yakit_etkilesim <- filter(m_tukey_yakit, term == "drivewheel")
+print(yakit_etkilesim)
+```
+
+
+-BEYGİR GÜCÜ VE FİYAT İÇİN GAMES-HOWELL TESTİ
+#Games-Howell fonksiyonları genellikle standart olarak A * B şeklindeki etkileşim formatını doğrudan desteklemez. Bu yüzden önce "Kasa Tipi" ve "Çekiş Sistemi" birleştirip tek bir "Grup" sütunu oluşturacağız, sonra bu grup üzerinden Games-Howell yapacağız.
+
+```{r}
+m_gh_proje <- proje_temiz121 %>%
+mutate(grup_kombinasyonu = paste(carbody, drivewheel, sep = ":")) %>%
+pivot_longer(c(price, horsepower), names_to = "variables", values_to = "value") %>%
+  group_by(variables) %>%
+  games_howell_test(value ~ grup_kombinasyonu)
+m_gh_proje <- m_gh_proje[,c(1,4,3,6:9)]
+m_gh_proje
+```
+
+#Testi yapmadan önce, içinde 2'den az araç olan grupları veri setinden filtreleyerek çıkarıyorum.
+
+```{r}
+m_gh_proje <- proje_temiz121 %>%
+mutate(grup_kombinasyonu = paste(carbody, drivewheel, sep = ":")) %>%
+group_by(grup_kombinasyonu) %>%
+  filter(n() > 1) %>% 
+  ungroup() %>%  
+pivot_longer(c(price, horsepower), names_to = "variables", values_to = "value") %>%
+  group_by(variables) %>%
+  games_howell_test(value ~ grup_kombinasyonu)
+m_gh_proje <- m_gh_proje[,c(1,4,3,6:9)]
+m_gh_proje
+```
+
+Etkilesim Grafikleri (Interaction Plots)
+
+```{r}
+attach(proje_temiz121)
+interaction.plot(carbody, drivewheel, price, 
+                 fun=mean, type="l", legend=TRUE, col=1:3, lwd=2
+                 )
+interaction.plot(carbody, drivewheel, horsepower, 
+                 fun=mean, type="l", legend=TRUE, col=1:3, lwd=2
+              )
+interaction.plot(carbody, drivewheel, citympg, 
+                 fun=mean, type="l", legend=TRUE, col=1:3, lwd=2
+                )
+detach(proje_temiz121)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
